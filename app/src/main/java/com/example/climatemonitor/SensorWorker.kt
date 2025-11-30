@@ -9,7 +9,7 @@ import androidx.work.WorkerParameters
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
-
+import android.util.Log
 
 class SensorWorker(
     appContext: Context,
@@ -19,24 +19,51 @@ class SensorWorker(
     private val client = OkHttpClient()
 
     override suspend fun doWork(): Result {
+        WidgetLogger.log(applicationContext, "SensorWorker.doWork() started")
+
         val url = inputData.getString("url") ?: BuildConfig.SENSOR_URL
 
         if (url.isBlank()) {
-            android.util.Log.e("ClimateMonitor", "No SENSOR_URL configured!")
+            Log.e("ClimateMonitor", "No SENSOR_URL configured!")
+            WidgetLogger.log(applicationContext, "ERROR: No SENSOR_URL configured")
             return Result.failure()
         }
 
         return try {
-            val request = Request.Builder().url(url).build()
+            WidgetLogger.log(applicationContext, "Requesting URL: $url")
+
+            val request = Request.Builder()
+                .url(url)
+                .header("Cache-Control", "no-cache")
+                .build()
+
             val response = client.newCall(request).execute()
 
-            if (!response.isSuccessful) return Result.retry()
-            val jsonString = response.body?.string() ?: return Result.retry()
+            if (!response.isSuccessful) {
+                val msg = "HTTP ${response.code} for $url"
+                Log.w("ClimateMonitor", msg)
+                WidgetLogger.log(applicationContext, "WARN: $msg")
+                return Result.retry()
+            }
+
+            val jsonString = response.body?.string()
+            if (jsonString == null) {
+                WidgetLogger.log(applicationContext, "ERROR: Empty response body → retrying")
+                return Result.retry()
+            }
+
+            Log.d("ClimateMonitor", "Fetched JSON: $jsonString")
+            WidgetLogger.log(applicationContext, "Fetched JSON: $jsonString")
+
             val json = JSONObject(jsonString)
 
             val temp = json.optDouble("temperature", Double.NaN)
             val humidity = json.optDouble("humidity", Double.NaN)
             val co2 = json.optInt("co2", -1)
+
+            val parsedMsg = "Parsed → temp=$temp humidity=$humidity co2=$co2"
+            Log.d("ClimateMonitor", parsedMsg)
+            WidgetLogger.log(applicationContext, parsedMsg)
 
             val views = RemoteViews(applicationContext.packageName, R.layout.widget_layout).apply {
                 setTextViewText(R.id.temp_text,
@@ -51,9 +78,17 @@ class SensorWorker(
             val widget = ComponentName(applicationContext, ClimateWidgetProvider::class.java)
             manager.updateAppWidget(widget, views)
 
+            WidgetLogger.log(applicationContext, "Widget updated successfully")
+            Log.d("ClimateMonitor", "Widget updated successfully")
+
             Result.success()
+
         } catch (e: Exception) {
+            val msg = "ERROR: ${e::class.java.simpleName}: ${e.message}"
+            Log.e("ClimateMonitor", msg, e)
+            WidgetLogger.log(applicationContext, msg)
             Result.retry()
         }
     }
+
 }
