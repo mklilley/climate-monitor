@@ -65,18 +65,33 @@ class SensorWorker(
             Log.d("ClimateMonitor", parsedMsg)
             WidgetLogger.log(applicationContext, parsedMsg)
 
-            val views = RemoteViews(applicationContext.packageName, R.layout.widget_layout).apply {
-                setTextViewText(R.id.temp_text,
-                    if (temp.isNaN()) "--°" else String.format("%.1f°", temp))
-                setTextViewText(R.id.humidity_text,
-                    if (humidity.isNaN()) "--%" else "${humidity.toInt()}%")
-                setTextViewText(R.id.co2_text,
-                    if (co2 < 0) "-- ppm" else "$co2 ppm")
+            val manager = AppWidgetManager.getInstance(applicationContext)
+            val widgetIds = manager.getAppWidgetIds(
+                ComponentName(applicationContext, ClimateWidgetProvider::class.java)
+            )
+
+            if (widgetIds.isEmpty()) {
+                WidgetLogger.log(applicationContext, "No widgets found; skipping update")
+                return Result.success()
             }
 
-            val manager = AppWidgetManager.getInstance(applicationContext)
-            val widget = ComponentName(applicationContext, ClimateWidgetProvider::class.java)
-            manager.updateAppWidget(widget, views)
+            WidgetLogger.log(applicationContext, "Updating widgets: ${widgetIds.toList()}")
+
+            for (id in widgetIds) {
+                val views = RemoteViews(applicationContext.packageName, R.layout.widget_layout).apply {
+                    setTextViewText(R.id.temp_text,
+                        if (temp.isNaN()) "--°" else String.format("%.1f°", temp))
+                    setTextViewText(R.id.humidity_text,
+                        if (humidity.isNaN()) "--%" else "${humidity.toInt()}%")
+                    setTextViewText(R.id.co2_text,
+                        if (co2 < 0) "-- ppm" else "$co2 ppm")
+                    setOnClickPendingIntent(
+                        R.id.widget_root,
+                        ClimateWidgetProvider.createRefreshPendingIntent(applicationContext, id)
+                    )
+                }
+                manager.updateAppWidget(id, views)
+            }
 
             WidgetLogger.log(applicationContext, "Widget updated successfully")
             Log.d("ClimateMonitor", "Widget updated successfully")

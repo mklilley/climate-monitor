@@ -31,7 +31,8 @@ class ClimateWidgetProvider : AppWidgetProvider() {
          * Create the PendingIntent for widget taps.
          * Now always uses a broadcast (no foreground-service PendingIntent).
          */
-        private fun createRefreshPendingIntent(context: Context, widgetId: Int): PendingIntent {
+        @JvmStatic
+        internal fun createRefreshPendingIntent(context: Context, widgetId: Int): PendingIntent {
             WidgetLogger.log(context, "Creating PI for widgetId=$widgetId")
 
             val intent = Intent(context, ClimateWidgetProvider::class.java).apply {

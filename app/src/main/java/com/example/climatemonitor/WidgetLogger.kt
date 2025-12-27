@@ -2,8 +2,6 @@ package com.example.climatemonitor
 
 import android.content.Context
 import java.io.File
-import java.text.SimpleDateFormat
-import java.util.*
 
 object WidgetLogger {
 
